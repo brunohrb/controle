@@ -327,6 +327,7 @@ export async function renderParent(app, state, navigate) {
     }
 
     document.getElementById('site-save').onclick = async () => {
+      const btn = document.getElementById('site-save')
       const id = document.getElementById('site-id').value
       const data = {
         name: document.getElementById('site-name').value.trim(),
@@ -337,18 +338,27 @@ export async function renderParent(app, state, navigate) {
       }
       if (!data.name) { showToast('Informe o nome do site', 'error'); return }
 
-      if (id) {
-        await updateSite(id, data)
-        const idx = sites.findIndex(s => s.id === id)
-        if (idx >= 0) sites[idx] = { ...sites[idx], ...data }
-        showToast('Site atualizado')
-      } else {
-        const newSite = await createSite(data)
-        sites.push(newSite)
-        showToast('Site adicionado')
+      btn.textContent = 'Salvando...'
+      btn.disabled = true
+
+      try {
+        if (id) {
+          await updateSite(id, data)
+          const idx = sites.findIndex(s => s.id === id)
+          if (idx >= 0) sites[idx] = { ...sites[idx], ...data }
+          showToast('Site atualizado')
+        } else {
+          const newSite = await createSite(data)
+          sites.push(newSite)
+          showToast('Site adicionado')
+        }
+        document.getElementById('site-modal').classList.add('hidden')
+        renderScreen('sites')
+      } catch (e) {
+        showToast('Erro: ' + (e.message || 'falha ao salvar'), 'error')
+        btn.textContent = 'Salvar'
+        btn.disabled = false
       }
-      document.getElementById('site-modal').classList.add('hidden')
-      renderScreen('sites')
     }
   }
 
@@ -470,6 +480,7 @@ export async function renderParent(app, state, navigate) {
     }
 
     document.getElementById('member-save').onclick = async () => {
+      const btn = document.getElementById('member-save')
       const id = document.getElementById('member-id').value
       const data = {
         name: document.getElementById('member-name').value.trim(),
@@ -478,18 +489,27 @@ export async function renderParent(app, state, navigate) {
       }
       if (!data.name) { showToast('Informe o nome', 'error'); return }
 
-      if (id) {
-        await updateMember(id, data)
-        const idx = members.findIndex(m => m.id === id)
-        if (idx >= 0) members[idx] = { ...members[idx], ...data }
-        showToast('Membro atualizado')
-      } else {
-        const newMember = await createMember(data)
-        members.push(newMember)
-        showToast('Membro adicionado')
+      btn.textContent = 'Salvando...'
+      btn.disabled = true
+
+      try {
+        if (id) {
+          await updateMember(id, data)
+          const idx = members.findIndex(m => m.id === id)
+          if (idx >= 0) members[idx] = { ...members[idx], ...data }
+          showToast('Membro atualizado')
+        } else {
+          const newMember = await createMember(data)
+          members.push(newMember)
+          showToast('Membro adicionado')
+        }
+        document.getElementById('member-modal').classList.add('hidden')
+        renderScreen('members')
+      } catch (e) {
+        showToast('Erro: ' + (e.message || 'falha ao salvar'), 'error')
+        btn.textContent = 'Salvar'
+        btn.disabled = false
       }
-      document.getElementById('member-modal').classList.add('hidden')
-      renderScreen('members')
     }
   }
 
