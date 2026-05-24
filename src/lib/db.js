@@ -118,3 +118,35 @@ export async function getAllTodaySessions() {
     .gte('started_at', today.toISOString())
   return data || []
 }
+
+export async function getActiveBlocks() {
+  const { data } = await supabase.from('ctrl_blocks')
+    .select('*, ctrl_sites(name, icon), ctrl_members(name, avatar)')
+    .eq('active', true)
+    .order('blocked_at', { ascending: false })
+  return data || []
+}
+
+export async function blockDomain(domain, siteId, memberId) {
+  const { data, error } = await supabase.functions.invoke('ctrl-block', {
+    body: { domain, site_id: siteId, member_id: memberId }
+  })
+  if (error) throw error
+  return data
+}
+
+export async function unblockDomain(domain) {
+  const { data, error } = await supabase.functions.invoke('ctrl-unblock', {
+    body: { domain }
+  })
+  if (error) throw error
+  return data
+}
+
+export async function unblockAll() {
+  const { data, error } = await supabase.functions.invoke('ctrl-unblock', {
+    body: { all: true }
+  })
+  if (error) throw error
+  return data
+}

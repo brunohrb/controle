@@ -1,4 +1,4 @@
-import { startSession, endSession, getTodaySessions, getMemberLimits } from '../lib/db.js'
+import { startSession, endSession, getTodaySessions, getMemberLimits, getActiveBlocks, blockDomain } from '../lib/db.js'
 import { formatTimer, formatDuration, getPercentage, getProgressColor, groupSessionsBysite, showToast } from '../lib/utils.js'
 
 export async function renderChild(app, state, navigate) {
@@ -7,9 +7,10 @@ export async function renderChild(app, state, navigate) {
 
   app.innerHTML = `<div class="screen"><div class="loading"><div class="spinner"></div></div></div>`
 
-  const [sessions, memberLimits] = await Promise.all([
+  const [sessions, memberLimits, activeBlocks] = await Promise.all([
     getTodaySessions(member.id),
-    getMemberLimits(member.id)
+    getMemberLimits(member.id),
+    getActiveBlocks()
   ])
 
   const limitMap = {}
@@ -17,11 +18,12 @@ export async function renderChild(app, state, navigate) {
 
   const usageMap = groupSessionsBysite(sessions)
 
-  // active sessions: site_id -> { sessionId, startedAt }
+  // set of currently blocked domains
+  const blockedDomains = new Set(activeBlocks.map(b => b.domain))
+
   if (!state.activeSessions) state.activeSessions = {}
   if (!state.timers) state.timers = {}
 
-  // Restore active sessions from DB that belong to this member
   sessions
     .filter(s => !s.ended_at)
     .forEach(s => {
@@ -37,10 +39,12 @@ export async function renderChild(app, state, navigate) {
   function getUsed(siteId) {
     const base = usageMap[siteId]?.seconds || 0
     const active = state.activeSessions[siteId]
-    if (active) {
-      return base + Math.floor((Date.now() - active.startedAt) / 1000)
-    }
+    if (active) return base + Math.floor((Date.now() - active.startedAt) / 1000)
     return base
+  }
+
+  function isBlocked(site) {
+    return site.domain && blockedDomains.has(site.domain)
   }
 
   function renderSiteCard(site) {
@@ -50,9 +54,10 @@ export async function renderChild(app, state, navigate) {
     const color = getProgressColor(pct)
     const isActive = !!state.activeSessions[site.id]
     const isOver = pct >= 100
+    const blocked = isBlocked(site)
 
     return `
-      <div class="site-card ${isActive ? 'active' : ''} ${isOver ? 'over-limit' : ''}" data-site="${site.id}">
+      <div class="site-card ${isActive ? 'active' : ''} ${isOver || blocked ? 'over-limit' : ''}" data-site="${site.id}">
         <div class="site-card-header">
           <span class="site-icon">${site.icon}</span>
           <div class="site-info">
@@ -62,21 +67,22 @@ export async function renderChild(app, state, navigate) {
               <span class="muted"> / ${limitMins}min</span>
             </div>
           </div>
-          ${isActive
-            ? `<button class="btn-stop" data-site="${site.id}">⏹ Parar</button>`
-            : `<button class="btn-start ${isOver ? 'disabled' : ''}" data-site="${site.id}" ${isOver ? 'disabled' : ''}>▶ Iniciar</button>`}
+          ${blocked
+            ? `<span class="badge-blocked">🔒 Bloqueado</span>`
+            : isActive
+              ? `<button class="btn-stop" data-site="${site.id}">⏹ Parar</button>`
+              : `<button class="btn-start ${isOver ? 'disabled' : ''}" data-site="${site.id}" ${isOver ? 'disabled' : ''}>▶ Iniciar</button>`}
         </div>
         <div class="progress-bar">
           <div class="progress-fill" id="bar-${site.id}" style="width:${pct}%;background:${color}"></div>
         </div>
         ${isActive ? `<div class="timer-display" id="timer-${site.id}">${formatTimer(Math.floor((Date.now() - state.activeSessions[site.id].startedAt) / 1000))}</div>` : ''}
-        ${isOver ? `<div class="limit-msg">⛔ Limite diário atingido</div>` : ''}
+        ${blocked ? `<div class="limit-msg">🔒 Bloqueado pelo NextDNS — peça ao responsável para liberar</div>` : isOver ? `<div class="limit-msg">⛔ Limite diário atingido</div>` : ''}
       </div>
     `
   }
 
   const totalUsed = Object.values(usageMap).reduce((acc, v) => acc + v.seconds, 0)
-  const totalLimit = sites.reduce((acc, s) => acc + getLimit(s), 0)
 
   app.innerHTML = `
     <div class="screen child-screen">
@@ -91,6 +97,12 @@ export async function renderChild(app, state, navigate) {
           <span class="child-total-value">${formatDuration(totalUsed)}</span>
         </div>
       </header>
+
+      ${blockedDomains.size > 0 ? `
+        <div class="blocked-banner">
+          🔒 ${blockedDomains.size} site(s) bloqueado(s) hoje. Peça ao responsável para liberar.
+        </div>
+      ` : ''}
 
       <div class="sites-list" id="sites-list">
         ${sites.length === 0
@@ -118,7 +130,7 @@ export async function renderChild(app, state, navigate) {
 
       const elapsed = Math.floor((Date.now() - active.startedAt) / 1000)
       const site = sites.find(s => s.id === siteId)
-      const base = (usageMap[siteId]?.seconds || 0)
+      const base = usageMap[siteId]?.seconds || 0
       const total = base + elapsed
       const limitMins = getLimit(site)
       const pct = getPercentage(total, limitMins)
@@ -134,11 +146,33 @@ export async function renderChild(app, state, navigate) {
 
       if (pct >= 100 && !site._warned) {
         site._warned = true
-        showToast(`⛔ ${site.name}: limite diário atingido!`, 'error')
-        stopSite(siteId)
+        stopSite(siteId).then(() => {
+          // Bloquear via NextDNS se o site tiver domínio configurado
+          if (site.domain) {
+            showToast(`🔒 ${site.name}: bloqueando no NextDNS...`, 'warning')
+            blockDomain(site.domain, site.id, member.id)
+              .then(() => {
+                blockedDomains.add(site.domain)
+                showToast(`🔒 ${site.name} bloqueado até amanhã!`, 'error')
+                const card = document.querySelector(`[data-site="${siteId}"]`)
+                if (card) {
+                  card.classList.add('over-limit')
+                  const btn = card.querySelector('.btn-start, .btn-stop')
+                  if (btn) {
+                    btn.replaceWith(Object.assign(document.createElement('span'), { className: 'badge-blocked', textContent: '🔒 Bloqueado' }))
+                  }
+                  const existingMsg = card.querySelector('.limit-msg')
+                  if (existingMsg) existingMsg.textContent = '🔒 Bloqueado pelo NextDNS — peça ao responsável para liberar'
+                }
+              })
+              .catch(() => showToast(`⛔ ${site.name}: limite atingido`, 'error'))
+          } else {
+            showToast(`⛔ ${site.name}: limite diário atingido!`, 'error')
+          }
+        })
       } else if (pct >= 75 && !site._warn75) {
         site._warn75 = true
-        showToast(`⚠️ ${site.name}: 75% do limite atingido`, 'warning')
+        showToast(`⚠️ ${site.name}: 75% do limite — restam ${Math.round((limitMins * 60 - total) / 60)}min`, 'warning')
       }
     }, 1000)
   }
@@ -159,7 +193,6 @@ export async function renderChild(app, state, navigate) {
           btn.textContent = '⏹ Parar'
           btn.onclick = () => stopSite(siteId)
         }
-        const header = card.querySelector('.site-card-header')
         if (!card.querySelector('.timer-display')) {
           const timerDiv = document.createElement('div')
           timerDiv.className = 'timer-display'
@@ -207,6 +240,7 @@ export async function renderChild(app, state, navigate) {
     }
 
     showToast(`⏹ ${site.name}: ${formatDuration(duration)} registrado`)
+    return duration
   }
 
   document.querySelectorAll('.btn-start:not(.disabled)').forEach(btn => {
@@ -217,7 +251,6 @@ export async function renderChild(app, state, navigate) {
     btn.onclick = () => stopSite(btn.dataset.site)
   })
 
-  // Resume timers for already-active sessions
   Object.keys(state.activeSessions).forEach(siteId => {
     if (sites.some(s => s.id === siteId)) startTimer(siteId)
   })

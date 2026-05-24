@@ -1,5 +1,5 @@
 import './styles/main.css'
-import { getSettings, getMembers, getSites, getOpenSessions, endSession } from './lib/db.js'
+import { getSettings, getMembers, getSites, getOpenSessions, endSession, setSetting, unblockAll } from './lib/db.js'
 import { renderHome } from './views/home.js'
 import { renderChild } from './views/child.js'
 import { renderParent } from './views/parent.js'
@@ -67,6 +67,19 @@ async function init() {
     state.settings = settings
     state.members = members
     state.sites = sites
+
+    // Reset diário: se mudou o dia, desbloquear tudo automaticamente
+    const today = new Date().toISOString().slice(0, 10)
+    if (settings.last_reset_date && settings.last_reset_date !== today) {
+      try {
+        await unblockAll()
+        await setSetting('last_reset_date', today)
+      } catch (e) {
+        console.warn('Reset diário falhou:', e)
+      }
+    } else if (!settings.last_reset_date) {
+      await setSetting('last_reset_date', today)
+    }
 
     renderApp()
   } catch (e) {

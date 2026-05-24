@@ -3,7 +3,8 @@ import {
   getSites, createSite, updateSite, deleteSite,
   getMembers, createMember, updateMember, deleteMember,
   getMemberLimits, setMemberLimit,
-  getSettings, setSetting
+  getSettings, setSetting,
+  getActiveBlocks, unblockDomain, unblockAll
 } from '../lib/db.js'
 import { formatDuration, getPercentage, getProgressColor, groupSessionsBysite, groupSessionsByDay, showToast, AVATARS, COLORS, DAYS_PT } from '../lib/utils.js'
 
@@ -12,12 +13,13 @@ let chartInstances = {}
 export async function renderParent(app, state, navigate) {
   app.innerHTML = `<div class="screen"><div class="loading"><div class="spinner"></div></div></div>`
 
-  const [sessions, weekSessions, sites, members, settings] = await Promise.all([
+  const [sessions, weekSessions, sites, members, settings, activeBlocks] = await Promise.all([
     getAllTodaySessions(),
     getWeekSessions(),
     getSites(),
     getMembers(),
-    getSettings()
+    getSettings(),
+    getActiveBlocks()
   ])
 
   state.sites = sites
@@ -38,6 +40,7 @@ export async function renderParent(app, state, navigate) {
         <nav class="tab-nav">
           <button class="tab-btn ${tab === 'today' ? 'active' : ''}" data-tab="today">📊 Hoje</button>
           <button class="tab-btn ${tab === 'week' ? 'active' : ''}" data-tab="week">📈 Semana</button>
+          <button class="tab-btn ${tab === 'blocks' ? 'active' : ''}" data-tab="blocks">🔒 Bloqueios${activeBlocks.length > 0 ? ` <span class="badge-count">${activeBlocks.length}</span>` : ''}</button>
           <button class="tab-btn ${tab === 'sites' ? 'active' : ''}" data-tab="sites">🌐 Sites</button>
           <button class="tab-btn ${tab === 'members' ? 'active' : ''}" data-tab="members">👥 Membros</button>
           <button class="tab-btn ${tab === 'settings' ? 'active' : ''}" data-tab="settings">⚙️ Config</button>
@@ -46,6 +49,7 @@ export async function renderParent(app, state, navigate) {
         <div class="tab-content" id="tab-content">
           ${tab === 'today' ? renderToday() : ''}
           ${tab === 'week' ? renderWeek() : ''}
+          ${tab === 'blocks' ? renderBlocks() : ''}
           ${tab === 'sites' ? renderSites() : ''}
           ${tab === 'members' ? renderMembers() : ''}
           ${tab === 'settings' ? renderSettings() : ''}
@@ -61,6 +65,7 @@ export async function renderParent(app, state, navigate) {
 
     if (tab === 'today') setupTodayHandlers()
     if (tab === 'week') setupWeekChart()
+    if (tab === 'blocks') setupBlocksHandlers()
     if (tab === 'sites') setupSitesHandlers()
     if (tab === 'members') setupMembersHandlers()
     if (tab === 'settings') setupSettingsHandlers()
@@ -515,6 +520,93 @@ export async function renderParent(app, state, navigate) {
       document.getElementById('limits-modal').classList.add('hidden')
       showToast('Limites salvos')
     }
+  }
+
+  // ── BLOCKS TAB ────────────────────────────────────────────────────────────
+
+  function renderBlocks() {
+    return `
+      <div class="section">
+        <div class="blocks-header">
+          <h3>Bloqueios ativos via NextDNS</h3>
+          ${activeBlocks.length > 0
+            ? `<button class="btn-danger-sm" id="btn-unblock-all">Liberar todos</button>`
+            : ''}
+        </div>
+
+        ${activeBlocks.length === 0
+          ? `<div class="empty-state">✅ Nenhum site bloqueado no momento.</div>`
+          : activeBlocks.map(b => `
+            <div class="list-item" data-domain="${b.domain}">
+              <span class="list-icon">${b.ctrl_sites?.icon || '🌐'}</span>
+              <div class="list-info">
+                <div class="list-name">${b.ctrl_sites?.name || b.domain}</div>
+                <div class="muted">${b.domain} · bloqueado ${new Date(b.blocked_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+              <button class="btn-primary btn-sm" data-domain="${b.domain}">Liberar</button>
+            </div>
+          `).join('')}
+
+        <div class="nextdns-info">
+          <h3>🌐 NextDNS — Configuração dos dispositivos</h3>
+          <p class="muted">Configure os servidores DNS abaixo em cada dispositivo para ativar o bloqueio:</p>
+          <div class="dns-card">
+            <div class="dns-row">
+              <span class="dns-label">DNS Primário</span>
+              <code class="dns-value">${settings.nextdns_dns1 || '45.90.28.55'}</code>
+            </div>
+            <div class="dns-row">
+              <span class="dns-label">DNS Secundário</span>
+              <code class="dns-value">${settings.nextdns_dns2 || '45.90.30.55'}</code>
+            </div>
+            <div class="dns-row">
+              <span class="dns-label">DNS-over-HTTPS</span>
+              <code class="dns-value">https://dns.nextdns.io/${settings.nextdns_profile_id || '2e2969'}</code>
+            </div>
+          </div>
+          <div class="device-guides">
+            <div class="device-guide">
+              <strong>📺 Smart TV (Android TV / Samsung / LG)</strong>
+              <p>Configurações → Rede → Wi-Fi → Configurações avançadas → DNS → Personalizar → <code>${settings.nextdns_dns1 || '45.90.28.55'}</code></p>
+            </div>
+            <div class="device-guide">
+              <strong>📱 Android</strong>
+              <p>Configurações → Conexões → Wi-Fi → Segurar na rede → Gerenciar → IP estático ou DNS privado → <code>2e2969.dns.nextdns.io</code></p>
+            </div>
+            <div class="device-guide">
+              <strong>🍎 iPhone / iPad</strong>
+              <p>Configurações → Wi-Fi → (i) na rede → Configurar DNS → Manual → Adicionar: <code>${settings.nextdns_dns1 || '45.90.28.55'}</code></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+  }
+
+  function setupBlocksHandlers() {
+    const btnUnblockAll = document.getElementById('btn-unblock-all')
+    if (btnUnblockAll) btnUnblockAll.onclick = async () => {
+      if (!confirm('Liberar todos os bloqueios?')) return
+      document.getElementById('btn-unblock-all').textContent = 'Liberando...'
+      document.getElementById('btn-unblock-all').disabled = true
+      await unblockAll()
+      activeBlocks.length = 0
+      showToast('✅ Todos os sites liberados')
+      renderScreen('blocks')
+    }
+
+    document.querySelectorAll('[data-domain] .btn-primary').forEach(btn => {
+      btn.onclick = async () => {
+        const domain = btn.dataset.domain || btn.closest('[data-domain]').dataset.domain
+        btn.textContent = 'Liberando...'
+        btn.disabled = true
+        await unblockDomain(domain)
+        const idx = activeBlocks.findIndex(b => b.domain === domain)
+        if (idx >= 0) activeBlocks.splice(idx, 1)
+        showToast(`✅ ${domain} liberado`)
+        renderScreen('blocks')
+      }
+    })
   }
 
   // ── SETTINGS TAB ──────────────────────────────────────────────────────────
