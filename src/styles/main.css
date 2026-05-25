@@ -67,53 +67,79 @@ body {
   padding-bottom: 32px;
 }
 
-/* ── HOME ─────────────────────────────────────────────────────── */
+/* ── HOME V2 ──────────────────────────────────────────────────── */
 
-.home-screen {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 24px 20px;
-  gap: 24px;
-}
+.home-screen-v2 { padding-bottom: 32px; }
 
-.home-hero {
-  text-align: center;
-  padding: 32px 0;
-}
-
-.home-logo {
-  font-size: 64px;
-  margin-bottom: 12px;
-}
-
-.home-hero h1 {
-  font-size: 28px;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.home-cards { display: flex; flex-direction: column; gap: 12px; }
-
-.home-card {
+.home-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
-  text-align: left;
-  width: 100%;
-  transition: all 0.2s;
-  color: var(--text);
+  justify-content: space-between;
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--border);
 }
 
-.home-card:hover {
-  background: var(--surface2);
-  transform: translateY(-1px);
+.home-header h1 { font-size: 22px; font-weight: 700; }
+
+.btn-parent {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 20px;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.btn-parent:hover { background: var(--surface2); }
+
+.extra-badge {
+  background: rgba(99,102,241,0.2);
+  color: var(--primary-light);
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.row-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
+
+.btn-extra {
+  padding: 5px 10px;
+  background: rgba(99,102,241,0.15);
+  color: var(--primary-light);
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-extra:hover { background: rgba(99,102,241,0.25); }
+
+.extra-options {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+}
+
+.btn-extra-opt {
+  padding: 12px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text); font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: all 0.1s;
+}
+
+.btn-extra-opt:hover { background: var(--primary); border-color: var(--primary); }
+
+.badge-ok {
+  font-size: 12px; color: var(--success); font-weight: 600;
+  padding: 4px 8px; background: rgba(16,185,129,0.1);
+  border-radius: 20px;
 }
 
 .home-card-icon { font-size: 32px; flex-shrink: 0; }

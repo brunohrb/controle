@@ -1,23 +1,20 @@
 import './styles/main.css'
-import { getSettings, getMembers, getSites, getOpenSessions, endSession, setSetting, unblockAll } from './lib/db.js'
+import { getSettings, getSites, getOpenSessions, endSession, setSetting, unblockAll } from './lib/db.js'
 import { renderHome } from './views/home.js'
-import { renderChild } from './views/child.js'
 import { renderParent } from './views/parent.js'
 
 const app = document.getElementById('app')
 
 export const state = {
   view: 'home',
-  member: null,
   settings: {},
-  members: [],
   sites: [],
-  activeSessions: {},
+  activeSessions: {}, // siteId -> { sessionId, startedAt }
   timers: {}
 }
 
 export function navigate(view, params = {}) {
-  if (state.view === 'child' && view !== 'child') {
+  if (state.view !== view) {
     Object.values(state.timers || {}).forEach(t => clearInterval(t))
     state.timers = {}
   }
@@ -27,25 +24,16 @@ export function navigate(view, params = {}) {
 }
 
 export function renderApp() {
-  switch (state.view) {
-    case 'home': return renderHome(app, state, navigate)
-    case 'child': return renderChild(app, state, navigate)
-    case 'dashboard': return renderParent(app, state, navigate)
-    default: return renderHome(app, state, navigate)
-  }
+  if (state.view === 'dashboard') return renderParent(app, state, navigate)
+  return renderHome(app, state, navigate)
 }
 
 async function init() {
-  app.innerHTML = `
-    <div class="loading-screen">
-      <div class="spinner"></div>
-      <p>Carregando...</p>
-    </div>
-  `
+  app.innerHTML = `<div class="loading-screen"><div class="spinner"></div><p>Carregando...</p></div>`
 
   try {
     const openSessions = await getOpenSessions()
-    const cutoff = Date.now() - 15 * 60 * 1000
+    const cutoff = Date.now() - 12 * 60 * 60 * 1000 // sessões > 12h são descartadas
 
     for (const s of openSessions) {
       if (new Date(s.started_at).getTime() < cutoff) {
@@ -58,36 +46,27 @@ async function init() {
       }
     }
 
-    const [settings, members, sites] = await Promise.all([
-      getSettings(),
-      getMembers(),
-      getSites()
-    ])
-
+    const [settings, sites] = await Promise.all([getSettings(), getSites()])
     state.settings = settings
-    state.members = members
     state.sites = sites
 
-    // Reset diário: se mudou o dia, desbloquear tudo automaticamente
+    // Reset diário automático
     const today = new Date().toISOString().slice(0, 10)
     if (settings.last_reset_date && settings.last_reset_date !== today) {
-      try {
-        await unblockAll()
-        await setSetting('last_reset_date', today)
-      } catch (e) {
-        console.warn('Reset diário falhou:', e)
-      }
-    } else if (!settings.last_reset_date) {
+      try { await unblockAll() } catch (e) { console.warn('unblockAll falhou:', e) }
+    }
+    if (settings.last_reset_date !== today) {
       await setSetting('last_reset_date', today)
     }
 
     renderApp()
   } catch (e) {
+    console.error(e)
     app.innerHTML = `
       <div class="error-screen">
         <div class="error-icon">⚠️</div>
         <h2>Erro de conexão</h2>
-        <p>Verifique sua internet e tente novamente.</p>
+        <p>${e.message || 'Verifique sua internet.'}</p>
         <button class="btn-primary" onclick="location.reload()">Tentar novamente</button>
       </div>
     `
