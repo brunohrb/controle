@@ -85,6 +85,10 @@ export async function renderHome(app, state, navigate) {
         <div class="blocked-banner">🔒 ${blockedDomains.size} site(s) bloqueado(s) hoje</div>
       ` : ''}
 
+      <div class="usage-tip">
+        ▶ Pressione <strong>Iniciar</strong> antes de abrir o site para cronometrar o uso
+      </div>
+
       <div class="sites-list" id="sites-list">
         ${sites.length === 0
           ? `<div class="empty-state">Nenhum site configurado.<br>Acesse o painel dos pais para adicionar.</div>`
@@ -175,12 +179,15 @@ export async function renderHome(app, state, navigate) {
                 showToast(`🔒 ${site.name} bloqueado!`, 'error')
                 renderHome(app, state, navigate)
               })
-              .catch(err => showToast(`Limite atingido (erro ao bloquear: ${err.message})`, 'error'))
+              .catch(err => {
+                showToast(`⛔ Limite atingido (erro ao bloquear: ${err.message})`, 'error')
+                renderHome(app, state, navigate)
+              })
           } else {
             showToast(`⛔ ${site.name}: limite diário atingido!`, 'error')
             renderHome(app, state, navigate)
           }
-        })
+        }).catch(err => showToast(`Erro ao parar sessão: ${err.message}`, 'error'))
       } else if (pct >= 75 && !site._warn75) {
         site._warn75 = true
         const remaining = Math.round((limitMins * 60 - total) / 60)

@@ -73,7 +73,9 @@ export async function renderParent(app, state, navigate) {
                 <button class="btn-extra" data-site="${site.id}" data-name="${site.name}">+Tempo</button>
                 ${isBlocked
                   ? `<button class="btn-primary btn-sm btn-unblock" data-domain="${site.domain}">Liberar</button>`
-                  : `<span class="badge-ok">✓ Livre</span>`}
+                  : site.domain
+                    ? `<button class="btn-ghost btn-sm btn-test-block" data-domain="${site.domain}" data-site="${site.id}" data-name="${site.name}">🧪 Testar</button>`
+                    : `<span class="badge-ok">✓ Livre</span>`}
               </div>
             </div>
           `
@@ -145,6 +147,25 @@ export async function renderParent(app, state, navigate) {
         btnAll.textContent = 'Liberar todos'; btnAll.disabled = false
       }
     }
+
+    document.querySelectorAll('.btn-test-block').forEach(btn => {
+      btn.onclick = async () => {
+        const confirmed = window.confirm(`Bloquear ${btn.dataset.name} agora para testar o DNS?\nVocê poderá liberar em seguida.`)
+        if (!confirmed) return
+        btn.textContent = '⏳'; btn.disabled = true
+        try {
+          const { blockDomain } = await import('../lib/db.js')
+          await blockDomain(btn.dataset.domain, btn.dataset.site)
+          showToast(`🔒 ${btn.dataset.name} bloqueado! Teste se o site abre no navegador.`, 'warning')
+          const newBlock = { domain: btn.dataset.domain, site_id: btn.dataset.site }
+          activeBlocks.push(newBlock)
+          render('blocks')
+        } catch (e) {
+          showToast('Erro ao bloquear: ' + e.message, 'error')
+          btn.textContent = '🧪 Testar'; btn.disabled = false
+        }
+      }
+    })
 
     let currentSiteId = null
     document.querySelectorAll('.btn-extra').forEach(btn => {
