@@ -154,12 +154,14 @@ async function runApp() {
     alert.addAction('🔓 Desbloquear + 30min extra')
   } else if (activeSession) {
     alert.addAction('⏹ Parar sessão')
+    alert.addAction('➕ Liberar +30min extra')
     alert.addAction('🔒 Parar e bloquear YouTube')
   } else if (pct < 100) {
     alert.addAction('▶ Iniciar sessão')
+    alert.addAction('➕ Liberar +30min extra')
     alert.addAction('🔒 Bloquear YouTube agora')
   } else {
-    alert.addAction('🔓 Liberar + 30min extra')
+    alert.addAction('🔓 Liberar +30min extra')
     alert.addAction('🔒 Bloquear YouTube agora')
   }
   alert.addCancelAction('Fechar')
@@ -186,7 +188,6 @@ async function runApp() {
     }
   } else if (activeSession) {
     if (choice === 0) {
-      // só parar
       const dur = await endSession(activeSession.id, activeSession.started_at)
       const done = new Alert()
       done.title = '⏹ Sessão encerrada'
@@ -194,7 +195,13 @@ async function runApp() {
       done.addAction('OK')
       await done.presentAlert()
     } else if (choice === 1) {
-      // parar e bloquear
+      await addExtraTime(30)
+      const done = new Alert()
+      done.title = '✅ +30min liberados'
+      done.message = 'Tempo extra adicionado. A sessão continua rodando.'
+      done.addAction('OK')
+      await done.presentAlert()
+    } else if (choice === 2) {
       await endSession(activeSession.id, activeSession.started_at)
       await block()
       const done = new Alert()
@@ -212,6 +219,13 @@ async function runApp() {
       done.addAction('OK')
       await done.presentAlert()
     } else if (choice === 1) {
+      await addExtraTime(30)
+      const done = new Alert()
+      done.title = '✅ +30min liberados'
+      done.message = '+30 minutos extras adicionados ao limite de hoje.'
+      done.addAction('OK')
+      await done.presentAlert()
+    } else if (choice === 2) {
       await block()
       const done = new Alert()
       done.title = '🔒 YouTube bloqueado'
