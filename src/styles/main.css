@@ -789,6 +789,9 @@ label {
   color: #fbbf24;
 }
 
+.nextdns-info details { border-top: 1px solid var(--border); padding-top: 4px; }
+.nextdns-info details[open] summary { color: var(--text); }
+
 /* ── RESPONSIVE ───────────────────────────────────────────────── */
 
 @media (max-width: 360px) {
