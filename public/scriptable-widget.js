@@ -177,9 +177,10 @@ async function runApp() {
       await done.presentAlert()
     } else if (choice === 1) {
       await Promise.all([unblock(), addExtraTime(30)])
+      await startSession()
       const done = new Alert()
       done.title = '🔓 YouTube desbloqueado'
-      done.message = '+30 minutos extras adicionados.'
+      done.message = '+30 minutos extras adicionados e sessão iniciada.'
       done.addAction('OK')
       await done.presentAlert()
     }
@@ -221,9 +222,10 @@ async function runApp() {
   } else {
     if (choice === 0) {
       await addExtraTime(30)
+      await startSession()
       const done = new Alert()
       done.title = '✅ +30min liberados'
-      done.message = 'Agora inicie uma sessão normalmente.'
+      done.message = 'Sessão iniciada com 30 minutos extras.'
       done.addAction('OK')
       await done.presentAlert()
     } else if (choice === 1) {
