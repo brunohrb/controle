@@ -89,16 +89,46 @@ export async function renderParent(app, state, navigate) {
 
         <div class="nextdns-info" style="margin-top:16px">
           <h3>📱 Como configurar os dispositivos</h3>
-          <p class="muted" style="margin-bottom:8px">Configure o DNS abaixo em cada dispositivo para o bloqueio funcionar:</p>
-          <div class="dns-card">
+          <div class="alert-warning" style="margin-bottom:12px">
+            ⚠️ <strong>Importante:</strong> O Chrome e o Safari ignoram o DNS do Wi-Fi e usam o próprio servidor. Configure conforme abaixo para o bloqueio funcionar.
+          </div>
+
+          <div class="device-guides">
+            <div class="device-guide device-guide-priority">
+              <strong>🌐 Chrome (PC, Android ou iPhone)</strong>
+              <p>O Chrome usa DNS seguro do Google por padrão — isso ignora o NextDNS. Para corrigir:</p>
+              <ol style="margin:6px 0 0 16px;padding:0;font-size:13px;line-height:1.8">
+                <li>Abra <code>chrome://settings/security</code></li>
+                <li>Em <em>DNS seguro</em>, escolha <strong>Personalizado</strong></li>
+                <li>Cole o endereço: <code class="dns-value-inline">https://dns.nextdns.io/${settings.nextdns_profile_id||'2e2969'}</code></li>
+              </ol>
+            </div>
+
+            <div class="device-guide device-guide-priority">
+              <strong>🍎 iPhone / iPad (bloqueio em todos os apps)</strong>
+              <p>Instale o perfil do NextDNS para que o bloqueio funcione em Wi-Fi e 4G/5G:</p>
+              <ol style="margin:6px 0 0 16px;padding:0;font-size:13px;line-height:1.8">
+                <li>No Safari, acesse: <code class="dns-value-inline">apple.nextdns.io/?profile=${settings.nextdns_profile_id||'2e2969'}</code></li>
+                <li>Toque em <strong>Permitir</strong> para baixar o perfil</li>
+                <li>Ajustes → Geral → VPN e Gerenciamento → instale o perfil</li>
+              </ol>
+            </div>
+
+            <div class="device-guide">
+              <strong>📱 Android (DNS privado — todos os apps)</strong>
+              <p>Configurações → Conexões → Mais → DNS Privado → <code>${settings.nextdns_profile_id||'2e2969'}.dns.nextdns.io</code></p>
+            </div>
+
+            <div class="device-guide">
+              <strong>📺 Smart TV (Android TV / Samsung)</strong>
+              <p>Configurações → Rede → Wi-Fi → Config avançadas → DNS → <code>${settings.nextdns_dns1||'45.90.28.55'}</code></p>
+            </div>
+          </div>
+
+          <div class="dns-card" style="margin-top:12px">
+            <p style="font-size:11px;color:#64748b;margin-bottom:6px">DNS manual (fallback — use só se as opções acima não funcionarem):</p>
             <div class="dns-row"><span class="dns-label">DNS Primário</span><code class="dns-value">${settings.nextdns_dns1||'45.90.28.55'}</code></div>
             <div class="dns-row"><span class="dns-label">DNS Secundário</span><code class="dns-value">${settings.nextdns_dns2||'45.90.30.55'}</code></div>
-            <div class="dns-row"><span class="dns-label">Android (DNS privado)</span><code class="dns-value">${settings.nextdns_profile_id||'2e2969'}.dns.nextdns.io</code></div>
-          </div>
-          <div class="device-guides">
-            <div class="device-guide"><strong>📺 Smart TV (Android TV / Samsung)</strong><p>Configurações → Rede → Wi-Fi → Config avançadas → DNS → <code>${settings.nextdns_dns1||'45.90.28.55'}</code></p></div>
-            <div class="device-guide"><strong>📱 Android</strong><p>Configurações → Wi-Fi → segurar na rede → Modificar → IP Avançado → DNS: <code>${settings.nextdns_dns1||'45.90.28.55'}</code><br>Ou: Configurações → Conexões → Mais → DNS privado → <code>${settings.nextdns_profile_id||'2e2969'}.dns.nextdns.io</code></p></div>
-            <div class="device-guide"><strong>🍎 iPhone</strong><p>Ajustes → Wi-Fi → (i) → Configurar DNS → Manual → <code>${settings.nextdns_dns1||'45.90.28.55'}</code></p></div>
           </div>
         </div>
       </div>
