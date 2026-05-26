@@ -1,15 +1,19 @@
 import './styles/main.css'
-import { getSettings, getSites, getOpenSessions, endSession, setSetting, unblockAll } from './lib/db.js'
+import { getSettings, getSites, getOpenSessions, endSession, setSetting, unblockAll, getUsers } from './lib/db.js'
+import { renderLogin } from './views/login.js'
 import { renderHome } from './views/home.js'
+import { renderHistory } from './views/history.js'
 import { renderParent } from './views/parent.js'
 
 const app = document.getElementById('app')
 
 export const state = {
-  view: 'home',
+  view: 'login',
   settings: {},
   sites: [],
-  activeSessions: {}, // siteId -> { sessionId, startedAt }
+  users: [],
+  currentUser: null,
+  activeSessions: {},
   timers: {}
 }
 
@@ -24,7 +28,12 @@ export function navigate(view, params = {}) {
 }
 
 export function renderApp() {
+  if (!state.currentUser && state.view !== 'login') {
+    state.view = 'login'
+  }
   if (state.view === 'dashboard') return renderParent(app, state, navigate)
+  if (state.view === 'history') return renderHistory(app, state, navigate)
+  if (state.view === 'login') return renderLogin(app, state, navigate)
   return renderHome(app, state, navigate)
 }
 
@@ -33,7 +42,7 @@ async function init() {
 
   try {
     const openSessions = await getOpenSessions()
-    const cutoff = Date.now() - 12 * 60 * 60 * 1000 // sessões > 12h são descartadas
+    const cutoff = Date.now() - 12 * 60 * 60 * 1000
 
     for (const s of openSessions) {
       if (new Date(s.started_at).getTime() < cutoff) {
@@ -41,16 +50,17 @@ async function init() {
       } else {
         state.activeSessions[s.site_id] = {
           sessionId: s.id,
-          startedAt: new Date(s.started_at).getTime()
+          startedAt: new Date(s.started_at).getTime(),
+          unlockMinutes: s.unlock_minutes || null
         }
       }
     }
 
-    const [settings, sites] = await Promise.all([getSettings(), getSites()])
+    const [settings, sites, users] = await Promise.all([getSettings(), getSites(), getUsers()])
     state.settings = settings
     state.sites = sites
+    state.users = users
 
-    // Reset diário automático
     const today = new Date().toISOString().slice(0, 10)
     if (settings.last_reset_date && settings.last_reset_date !== today) {
       try { await unblockAll() } catch (e) { console.warn('unblockAll falhou:', e) }
@@ -59,7 +69,7 @@ async function init() {
       await setSetting('last_reset_date', today)
     }
 
-    renderApp()
+    navigate('login')
   } catch (e) {
     console.error(e)
     app.innerHTML = `
