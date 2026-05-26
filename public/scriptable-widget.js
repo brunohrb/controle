@@ -89,6 +89,10 @@ async function endSession(sessionId, startedAt) {
   return duration
 }
 
+async function block() {
+  return invokeFunction('ctrl-block', { domain: YOUTUBE_DOMAIN, site_id: YOUTUBE_SITE_ID })
+}
+
 async function unblock() {
   return invokeFunction('ctrl-unblock', { domain: YOUTUBE_DOMAIN })
 }
@@ -150,11 +154,13 @@ async function runApp() {
     alert.addAction('🔓 Desbloquear + 30min extra')
   } else if (activeSession) {
     alert.addAction('⏹ Parar sessão')
+    alert.addAction('🔒 Parar e bloquear YouTube')
   } else if (pct < 100) {
     alert.addAction('▶ Iniciar sessão')
+    alert.addAction('🔒 Bloquear YouTube agora')
   } else {
-    // limite atingido mas não bloqueado ainda
     alert.addAction('🔓 Liberar + 30min extra')
+    alert.addAction('🔒 Bloquear YouTube agora')
   }
   alert.addCancelAction('Fechar')
 
@@ -163,7 +169,6 @@ async function runApp() {
 
   if (blocked) {
     if (choice === 0) {
-      // só desbloquear
       await unblock()
       const done = new Alert()
       done.title = '🔓 YouTube desbloqueado'
@@ -171,7 +176,6 @@ async function runApp() {
       done.addAction('OK')
       await done.presentAlert()
     } else if (choice === 1) {
-      // desbloquear + 30min
       await Promise.all([unblock(), addExtraTime(30)])
       const done = new Alert()
       done.title = '🔓 YouTube desbloqueado'
@@ -180,26 +184,53 @@ async function runApp() {
       await done.presentAlert()
     }
   } else if (activeSession) {
-    const dur = await endSession(activeSession.id, activeSession.started_at)
-    const done = new Alert()
-    done.title = '⏹ Sessão encerrada'
-    done.message = `Duração: ${formatDuration(dur)}\nTotal hoje: ${formatDuration(usedSec + dur)}`
-    done.addAction('OK')
-    await done.presentAlert()
+    if (choice === 0) {
+      // só parar
+      const dur = await endSession(activeSession.id, activeSession.started_at)
+      const done = new Alert()
+      done.title = '⏹ Sessão encerrada'
+      done.message = `Duração: ${formatDuration(dur)}\nTotal hoje: ${formatDuration(usedSec + dur)}`
+      done.addAction('OK')
+      await done.presentAlert()
+    } else if (choice === 1) {
+      // parar e bloquear
+      await endSession(activeSession.id, activeSession.started_at)
+      await block()
+      const done = new Alert()
+      done.title = '🔒 YouTube bloqueado'
+      done.message = 'Sessão encerrada e YouTube bloqueado no DNS.'
+      done.addAction('OK')
+      await done.presentAlert()
+    }
+  } else if (pct < 100) {
+    if (choice === 0) {
+      await startSession()
+      const done = new Alert()
+      done.title = '▶ Sessão iniciada!'
+      done.message = 'O tempo do YouTube está sendo contado.'
+      done.addAction('OK')
+      await done.presentAlert()
+    } else if (choice === 1) {
+      await block()
+      const done = new Alert()
+      done.title = '🔒 YouTube bloqueado'
+      done.message = 'YouTube bloqueado no DNS.'
+      done.addAction('OK')
+      await done.presentAlert()
+    }
   } else {
-    // iniciar ou liberar extra
-    if (pct >= 100) {
+    if (choice === 0) {
       await addExtraTime(30)
       const done = new Alert()
       done.title = '✅ +30min liberados'
       done.message = 'Agora inicie uma sessão normalmente.'
       done.addAction('OK')
       await done.presentAlert()
-    } else {
-      await startSession()
+    } else if (choice === 1) {
+      await block()
       const done = new Alert()
-      done.title = '▶ Sessão iniciada!'
-      done.message = 'O tempo do YouTube está sendo contado.'
+      done.title = '🔒 YouTube bloqueado'
+      done.message = 'YouTube bloqueado no DNS.'
       done.addAction('OK')
       await done.presentAlert()
     }
