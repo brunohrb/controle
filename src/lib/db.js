@@ -40,13 +40,22 @@ export async function deleteSite(id) {
 
 // ── SESSIONS ───────────────────────────────────────────────────────────────
 
-export async function startSession(siteId) {
+export async function startSession(siteId, { auto = false } = {}) {
   const { data, error } = await supabase.from('ctrl_sessions').insert({
     site_id: siteId,
-    started_at: new Date().toISOString()
+    started_at: new Date().toISOString(),
+    auto
   }).select().single()
   if (error) throw error
   return data
+}
+
+export async function getAutoSessions() {
+  const { data } = await supabase.from('ctrl_sessions')
+    .select('*')
+    .is('ended_at', null)
+    .eq('auto', true)
+  return data || []
 }
 
 export async function endSession(sessionId, startedAt) {
@@ -118,6 +127,12 @@ export async function unblockAll() {
   const { data, error } = await supabase.functions.invoke('ctrl-unblock', {
     body: { all: true }
   })
+  if (error) throw error
+  return data
+}
+
+export async function getNextDNSStatus() {
+  const { data, error } = await supabase.functions.invoke('ctrl-status', { body: {} })
   if (error) throw error
   return data
 }

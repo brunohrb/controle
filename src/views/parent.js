@@ -2,7 +2,8 @@ import {
   getSites, createSite, updateSite, deleteSite,
   getSettings, setSetting,
   getActiveBlocks, unblockDomain, unblockAll,
-  getWeekSessions, addExtraTime, getExtraTime
+  getWeekSessions, addExtraTime, getExtraTime,
+  getNextDNSStatus
 } from '../lib/db.js'
 import { formatDuration, groupSessionsByDay, showToast, COLORS, DAYS_PT } from '../lib/utils.js'
 
@@ -88,17 +89,93 @@ export async function renderParent(app, state, navigate) {
         ` : ''}
 
         <div class="nextdns-info" style="margin-top:16px">
-          <h3>📱 Como configurar os dispositivos</h3>
-          <p class="muted" style="margin-bottom:8px">Configure o DNS abaixo em cada dispositivo para o bloqueio funcionar:</p>
-          <div class="dns-card">
-            <div class="dns-row"><span class="dns-label">DNS Primário</span><code class="dns-value">${settings.nextdns_dns1||'45.90.28.55'}</code></div>
-            <div class="dns-row"><span class="dns-label">DNS Secundário</span><code class="dns-value">${settings.nextdns_dns2||'45.90.30.55'}</code></div>
-            <div class="dns-row"><span class="dns-label">Android (DNS privado)</span><code class="dns-value">${settings.nextdns_profile_id||'2e2969'}.dns.nextdns.io</code></div>
+          <div class="diag-bar">
+            <span>🔍 Verificar se o NextDNS está bloqueando corretamente</span>
+            <button class="btn-ghost btn-sm" id="btn-diag">Verificar</button>
           </div>
+          <div id="diag-result" style="display:none"></div>
+
+          <h3 style="margin-top:14px">📡 Configurar para o bloqueio funcionar</h3>
+
+          <div class="alert-warning" style="margin-bottom:12px">
+            ⚠️ O bloqueio só funciona se o dispositivo usar o NextDNS como DNS. Configure na <strong>ONU/roteador</strong> para afetar todos os aparelhos de uma vez.
+          </div>
+
           <div class="device-guides">
-            <div class="device-guide"><strong>📺 Smart TV (Android TV / Samsung)</strong><p>Configurações → Rede → Wi-Fi → Config avançadas → DNS → <code>${settings.nextdns_dns1||'45.90.28.55'}</code></p></div>
-            <div class="device-guide"><strong>📱 Android</strong><p>Configurações → Wi-Fi → segurar na rede → Modificar → IP Avançado → DNS: <code>${settings.nextdns_dns1||'45.90.28.55'}</code><br>Ou: Configurações → Conexões → Mais → DNS privado → <code>${settings.nextdns_profile_id||'2e2969'}.dns.nextdns.io</code></p></div>
-            <div class="device-guide"><strong>🍎 iPhone</strong><p>Ajustes → Wi-Fi → (i) → Configurar DNS → Manual → <code>${settings.nextdns_dns1||'45.90.28.55'}</code></p></div>
+
+            <div class="device-guide device-guide-priority">
+              <strong>🔌 ONU/Roteador Huawei (recomendado — afeta todos os dispositivos)</strong>
+              <p>Configure o DNS direto na ONU para que <em>todos</em> os aparelhos da casa (TV, celular, PC) usem o NextDNS automaticamente:</p>
+              <ol style="margin:6px 0 0 16px;padding:0;font-size:13px;line-height:1.9">
+                <li>No navegador do celular ou PC, acesse: <code class="dns-value-inline">192.168.1.1</code> (ou <code class="dns-value-inline">192.168.100.1</code>)</li>
+                <li>Login: usuário <code>admin</code> e a senha que está na etiqueta da ONU</li>
+                <li>Vá em <strong>Configuração LAN</strong> → <strong>Servidor DHCP</strong></li>
+                <li>Em <em>DNS Primário</em>: <code class="dns-value-inline">${settings.nextdns_dns1||'45.90.28.55'}</code></li>
+                <li>Em <em>DNS Secundário</em>: <code class="dns-value-inline">${settings.nextdns_dns2||'45.90.30.55'}</code></li>
+                <li>Salvar → reconectar o Wi-Fi em cada aparelho</li>
+              </ol>
+              <p style="font-size:11px;color:var(--muted);margin-top:6px">Após isso, remova o DNS manual da Samsung TV (volte para automático) e reinicie o YouTube.</p>
+            </div>
+
+            <div class="device-guide device-guide-priority">
+              <strong>📺 Android TV (Philips, Sony, TCL, Xiaomi...)</strong>
+              <p>DNS Privado funciona em todos os apps, incluindo YouTube:</p>
+              <ol style="margin:6px 0 0 16px;padding:0;font-size:13px;line-height:1.9">
+                <li>Configurações → <strong>Rede e Internet</strong></li>
+                <li>Toque em <strong>DNS Privado</strong></li>
+                <li>Escolha <em>Nome do host do provedor de DNS privado</em></li>
+                <li>Digite: <code class="dns-value-inline">${settings.nextdns_profile_id||'2e2969'}.dns.nextdns.io</code></li>
+                <li>Salvar — reinicie o YouTube</li>
+              </ol>
+            </div>
+
+            <div class="device-guide device-guide-priority">
+              <strong>📺 Samsung Smart TV (Tizen)</strong>
+              <ol style="margin:6px 0 0 16px;padding:0;font-size:13px;line-height:1.9">
+                <li>Configurações → <strong>Geral</strong> → <strong>Rede</strong></li>
+                <li>Estado da Rede → <strong>Configurações de IP</strong></li>
+                <li>Configuração de DNS → <strong>Inserir manualmente</strong></li>
+                <li>Servidor DNS: <code class="dns-value-inline">${settings.nextdns_dns1||'45.90.28.55'}</code></li>
+                <li>OK → reinicie o YouTube</li>
+              </ol>
+            </div>
+
+            <div class="device-guide device-guide-priority">
+              <strong>📺 LG Smart TV (webOS)</strong>
+              <ol style="margin:6px 0 0 16px;padding:0;font-size:13px;line-height:1.9">
+                <li>Configurações → <strong>Rede</strong> → Wi-Fi</li>
+                <li>Toque em <strong>Editar</strong> (lápis)</li>
+                <li>Ative <em>Definir manualmente</em></li>
+                <li>Servidor DNS: <code class="dns-value-inline">${settings.nextdns_dns1||'45.90.28.55'}</code></li>
+                <li>Conectar → reinicie o YouTube</li>
+              </ol>
+            </div>
+
+            <div class="device-guide">
+              <strong>🔁 Alternativa para qualquer TV — configurar no roteador</strong>
+              <p style="font-size:12px;margin-bottom:6px">Se não funcionar direto na TV, configure no roteador: afeta todos os aparelhos do Wi-Fi sem tocar em cada um.</p>
+              <p style="font-size:13px">No painel do roteador (geralmente <code>192.168.0.1</code> ou <code>192.168.1.1</code>):<br>
+              Procure <em>DNS</em> nas configurações de WAN/Internet e configure:<br>
+              DNS 1: <code>${settings.nextdns_dns1||'45.90.28.55'}</code> &nbsp; DNS 2: <code>${settings.nextdns_dns2||'45.90.30.55'}</code></p>
+            </div>
+
+            <details style="margin-top:4px">
+              <summary style="font-size:13px;color:var(--muted);cursor:pointer;padding:8px 0">📱 Configurar celular também...</summary>
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+                <div class="device-guide">
+                  <strong>📱 Android (DNS privado)</strong>
+                  <p>Configurações → Conexões → Mais → DNS Privado → <code>${settings.nextdns_profile_id||'2e2969'}.dns.nextdns.io</code></p>
+                </div>
+                <div class="device-guide">
+                  <strong>🍎 iPhone (perfil de configuração)</strong>
+                  <p>No Safari: <code>apple.nextdns.io/?profile=${settings.nextdns_profile_id||'2e2969'}</code> → instalar perfil em Ajustes → Geral → VPN e Gerenciamento</p>
+                </div>
+                <div class="device-guide">
+                  <strong>🌐 Chrome no PC</strong>
+                  <p>Abra <code>chrome://settings/security</code> → DNS seguro → Personalizado → <code>https://dns.nextdns.io/${settings.nextdns_profile_id||'2e2969'}</code></p>
+                </div>
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -118,6 +195,38 @@ export async function renderParent(app, state, navigate) {
   }
 
   function setupBlocks() {
+    const btnDiag = document.getElementById('btn-diag')
+    const diagResult = document.getElementById('diag-result')
+    if (btnDiag) {
+      btnDiag.onclick = async () => {
+        btnDiag.textContent = '...'; btnDiag.disabled = true
+        diagResult.style.display = 'none'
+        try {
+          const status = await getNextDNSStatus()
+          const blocked = status.blocked || []
+          const activeNames = activeBlocks.map(b => b.domain)
+          const missing = activeNames.filter(d => !blocked.includes(d))
+          if (missing.length > 0) {
+            diagResult.className = 'diag-result-err'
+            diagResult.innerHTML = `❌ <strong>Problema encontrado:</strong> Os seguintes domínios estão bloqueados no app mas <u>não estão no NextDNS</u>: <strong>${missing.join(', ')}</strong><br><small>Isso explica por que o bloqueio não funciona. Tente desbloquear e bloquear novamente o site.</small>`
+          } else if (blocked.length === 0) {
+            diagResult.className = 'diag-result-err'
+            diagResult.innerHTML = `⚠️ <strong>NextDNS não tem nenhum bloqueio ativo.</strong> A comunicação com o NextDNS pode ter falhado. Tente desbloquear e bloquear novamente.`
+          } else {
+            diagResult.className = 'diag-result-ok'
+            diagResult.innerHTML = `✅ <strong>NextDNS está bloqueando:</strong> ${blocked.join(', ')}<br><small>Se a TV ainda abre o YouTube, configure o DNS na ONU Huawei conforme as instruções abaixo.</small>`
+          }
+          diagResult.style.display = 'block'
+        } catch (e) {
+          diagResult.className = 'diag-result-err'
+          diagResult.textContent = '❌ Erro ao verificar: ' + e.message
+          diagResult.style.display = 'block'
+        } finally {
+          btnDiag.textContent = 'Verificar'; btnDiag.disabled = false
+        }
+      }
+    }
+
     document.querySelectorAll('.btn-unblock').forEach(btn => {
       btn.onclick = async () => {
         btn.textContent = '...'; btn.disabled = true

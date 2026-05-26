@@ -1,14 +1,29 @@
-import { startSession, endSession, getTodayUsage, getActiveBlocks, blockDomain, getExtraTime } from '../lib/db.js'
+import { startSession, endSession, getTodayUsage, getActiveBlocks, blockDomain, getExtraTime, getAutoSessions } from '../lib/db.js'
 import { formatTimer, formatDuration, getPercentage, getProgressColor, showToast } from '../lib/utils.js'
 
 export async function renderHome(app, state, navigate) {
   app.innerHTML = `<div class="loading-screen"><div class="spinner"></div></div>`
 
-  const [usageMap, activeBlocks, extraTime] = await Promise.all([
+  const [usageMap, activeBlocks, extraTime, autoSessions] = await Promise.all([
     getTodayUsage(),
     getActiveBlocks(),
-    getExtraTime()
+    getExtraTime(),
+    getAutoSessions()
   ])
+
+  // Build set of site IDs currently being auto-tracked
+  const autoTrackedSites = new Set(autoSessions.map(s => s.site_id))
+
+  // Sync auto sessions into state.activeSessions so timers work
+  for (const s of autoSessions) {
+    if (!state.activeSessions[s.site_id]) {
+      state.activeSessions[s.site_id] = {
+        sessionId: s.id,
+        startedAt: new Date(s.started_at).getTime(),
+        auto: true
+      }
+    }
+  }
 
   const blockedDomains = new Set(activeBlocks.map(b => b.domain))
   const { sites, settings } = state
@@ -37,6 +52,7 @@ export async function renderHome(app, state, navigate) {
     const pct = getPercentage(usedSec, limitMins)
     const color = getProgressColor(pct)
     const isActive = !!state.activeSessions[site.id]
+    const isAuto = autoTrackedSites.has(site.id)
     const blocked = isBlocked(site)
     const over = pct >= 100
 
@@ -45,7 +61,10 @@ export async function renderHome(app, state, navigate) {
         <div class="site-card-header">
           <span class="site-icon">${site.icon}</span>
           <div class="site-info">
-            <div class="site-name">${site.name}</div>
+            <div class="site-name">
+              ${site.name}
+              ${isAuto ? `<span class="auto-badge" title="Sessão detectada automaticamente via DNS">🤖 Auto</span>` : ''}
+            </div>
             <div class="site-usage">
               <span id="used-${site.id}" style="color:${color}">${formatDuration(usedSec)}</span>
               <span class="muted"> / ${limitMins}min</span>
