@@ -122,6 +122,12 @@ export async function unblockAll() {
   return data
 }
 
+export async function getNextDNSStatus() {
+  const { data, error } = await supabase.functions.invoke('ctrl-status', { body: {} })
+  if (error) throw error
+  return data
+}
+
 // ── EXTRA TIME ────────────────────────────────────────────────────────────
 // Armazena tempo extra liberado hoje pelo pai (ex: +30min no YouTube)
 

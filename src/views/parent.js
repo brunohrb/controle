@@ -2,7 +2,8 @@ import {
   getSites, createSite, updateSite, deleteSite,
   getSettings, setSetting,
   getActiveBlocks, unblockDomain, unblockAll,
-  getWeekSessions, addExtraTime, getExtraTime
+  getWeekSessions, addExtraTime, getExtraTime,
+  getNextDNSStatus
 } from '../lib/db.js'
 import { formatDuration, groupSessionsByDay, showToast, COLORS, DAYS_PT } from '../lib/utils.js'
 
@@ -88,9 +89,33 @@ export async function renderParent(app, state, navigate) {
         ` : ''}
 
         <div class="nextdns-info" style="margin-top:16px">
-          <h3>📺 Configurar dispositivos para o bloqueio funcionar</h3>
+          <div class="diag-bar">
+            <span>🔍 Verificar se o NextDNS está bloqueando corretamente</span>
+            <button class="btn-ghost btn-sm" id="btn-diag">Verificar</button>
+          </div>
+          <div id="diag-result" style="display:none"></div>
+
+          <h3 style="margin-top:14px">📡 Configurar para o bloqueio funcionar</h3>
+
+          <div class="alert-warning" style="margin-bottom:12px">
+            ⚠️ O bloqueio só funciona se o dispositivo usar o NextDNS como DNS. Configure na <strong>ONU/roteador</strong> para afetar todos os aparelhos de uma vez.
+          </div>
 
           <div class="device-guides">
+
+            <div class="device-guide device-guide-priority">
+              <strong>🔌 ONU/Roteador Huawei (recomendado — afeta todos os dispositivos)</strong>
+              <p>Configure o DNS direto na ONU para que <em>todos</em> os aparelhos da casa (TV, celular, PC) usem o NextDNS automaticamente:</p>
+              <ol style="margin:6px 0 0 16px;padding:0;font-size:13px;line-height:1.9">
+                <li>No navegador do celular ou PC, acesse: <code class="dns-value-inline">192.168.1.1</code> (ou <code class="dns-value-inline">192.168.100.1</code>)</li>
+                <li>Login: usuário <code>admin</code> e a senha que está na etiqueta da ONU</li>
+                <li>Vá em <strong>Configuração LAN</strong> → <strong>Servidor DHCP</strong></li>
+                <li>Em <em>DNS Primário</em>: <code class="dns-value-inline">${settings.nextdns_dns1||'45.90.28.55'}</code></li>
+                <li>Em <em>DNS Secundário</em>: <code class="dns-value-inline">${settings.nextdns_dns2||'45.90.30.55'}</code></li>
+                <li>Salvar → reconectar o Wi-Fi em cada aparelho</li>
+              </ol>
+              <p style="font-size:11px;color:var(--muted);margin-top:6px">Após isso, remova o DNS manual da Samsung TV (volte para automático) e reinicie o YouTube.</p>
+            </div>
 
             <div class="device-guide device-guide-priority">
               <strong>📺 Android TV (Philips, Sony, TCL, Xiaomi...)</strong>
@@ -170,6 +195,38 @@ export async function renderParent(app, state, navigate) {
   }
 
   function setupBlocks() {
+    const btnDiag = document.getElementById('btn-diag')
+    const diagResult = document.getElementById('diag-result')
+    if (btnDiag) {
+      btnDiag.onclick = async () => {
+        btnDiag.textContent = '...'; btnDiag.disabled = true
+        diagResult.style.display = 'none'
+        try {
+          const status = await getNextDNSStatus()
+          const blocked = status.blocked || []
+          const activeNames = activeBlocks.map(b => b.domain)
+          const missing = activeNames.filter(d => !blocked.includes(d))
+          if (missing.length > 0) {
+            diagResult.className = 'diag-result-err'
+            diagResult.innerHTML = `❌ <strong>Problema encontrado:</strong> Os seguintes domínios estão bloqueados no app mas <u>não estão no NextDNS</u>: <strong>${missing.join(', ')}</strong><br><small>Isso explica por que o bloqueio não funciona. Tente desbloquear e bloquear novamente o site.</small>`
+          } else if (blocked.length === 0) {
+            diagResult.className = 'diag-result-err'
+            diagResult.innerHTML = `⚠️ <strong>NextDNS não tem nenhum bloqueio ativo.</strong> A comunicação com o NextDNS pode ter falhado. Tente desbloquear e bloquear novamente.`
+          } else {
+            diagResult.className = 'diag-result-ok'
+            diagResult.innerHTML = `✅ <strong>NextDNS está bloqueando:</strong> ${blocked.join(', ')}<br><small>Se a TV ainda abre o YouTube, configure o DNS na ONU Huawei conforme as instruções abaixo.</small>`
+          }
+          diagResult.style.display = 'block'
+        } catch (e) {
+          diagResult.className = 'diag-result-err'
+          diagResult.textContent = '❌ Erro ao verificar: ' + e.message
+          diagResult.style.display = 'block'
+        } finally {
+          btnDiag.textContent = 'Verificar'; btnDiag.disabled = false
+        }
+      }
+    }
+
     document.querySelectorAll('.btn-unblock').forEach(btn => {
       btn.onclick = async () => {
         btn.textContent = '...'; btn.disabled = true
