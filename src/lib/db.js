@@ -40,11 +40,12 @@ export async function deleteSite(id) {
 
 // ── SESSIONS ───────────────────────────────────────────────────────────────
 
-export async function startSession(siteId, { auto = false } = {}) {
+export async function startSession(siteId, { auto = false, userId = null } = {}) {
   const { data, error } = await supabase.from('ctrl_sessions').insert({
     site_id: siteId,
     started_at: new Date().toISOString(),
-    auto
+    auto,
+    user_id: userId
   }).select().single()
   if (error) throw error
   return data
@@ -138,7 +139,6 @@ export async function getNextDNSStatus() {
 }
 
 // ── EXTRA TIME ────────────────────────────────────────────────────────────
-// Armazena tempo extra liberado hoje pelo pai (ex: +30min no YouTube)
 
 export async function getExtraTime() {
   const today = new Date().toISOString().slice(0, 10)
@@ -160,4 +160,52 @@ export async function addExtraTime(siteId, minutes) {
     .select('value').eq('key', key).single()
   const current = parseInt(existing?.value) || 0
   await setSetting(key, String(current + minutes))
+}
+
+// ── USERS ─────────────────────────────────────────────────────────────────
+
+export async function getUsers() {
+  const { data } = await supabase.from('ctrl_users')
+    .select('*').eq('active', true).order('name')
+  return data || []
+}
+
+// ── UNLOCK EVENTS ─────────────────────────────────────────────────────────
+
+export async function logUnlockEvent(siteId, userId, minutes) {
+  const { error } = await supabase.from('ctrl_unlock_events').insert({
+    site_id: siteId, user_id: userId, minutes,
+    unlocked_at: new Date().toISOString()
+  })
+  if (error) throw error
+}
+
+export async function getUnlockHistory(days = 7) {
+  const d = new Date()
+  d.setDate(d.getDate() - (days - 1))
+  d.setHours(0, 0, 0, 0)
+  const { data } = await supabase.from('ctrl_unlock_events')
+    .select('*, ctrl_sites(name, icon, color), ctrl_users(name, color)')
+    .gte('unlocked_at', d.toISOString())
+    .order('unlocked_at', { ascending: false })
+  return data || []
+}
+
+export async function unblockSite(siteId, domain, userId, minutes) {
+  const { error: unblockErr } = await supabase.functions.invoke('ctrl-unblock', { body: { domain } })
+  if (unblockErr) throw unblockErr
+
+  const { data: session, error: sessErr } = await supabase.from('ctrl_sessions').insert({
+    site_id: siteId,
+    started_at: new Date().toISOString(),
+    user_id: userId,
+    unlock_minutes: minutes,
+    auto: false
+  }).select().single()
+  if (sessErr) throw sessErr
+
+  await logUnlockEvent(siteId, userId, minutes)
+  await setSetting(`reblock_at_${siteId}`, new Date(Date.now() + minutes * 60 * 1000).toISOString())
+
+  return session
 }
